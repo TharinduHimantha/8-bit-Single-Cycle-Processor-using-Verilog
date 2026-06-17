@@ -101,6 +101,7 @@ module alu (
     input  wire [7:0] DATA1,
     input  wire [7:0] DATA2,
     output reg  [7:0] RESULT,
+    output reg        ZERO,      // Added ZERO port for branch evaluation
     input  wire [2:0] SELECT
 );
 
@@ -131,10 +132,16 @@ module alu (
             // OR
             3'b011:  RESULT = or_res;
             
-            // For Reserved combinations 1XX (tempory)
+            // For Reserved combinations 1XX
             default: RESULT = 8'b00000000;
 
         endcase
+
+        // Update the ZERO flag dynamically 
+        if (RESULT == 8'b00000000)
+            ZERO = 1'b1;
+        else
+            ZERO = 1'b0;
     end
 
 endmodule
