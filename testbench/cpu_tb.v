@@ -32,7 +32,7 @@ module cpu_tb;
     // ---------------------------------------------------------------------
     // Clock Generator
     // Period of 8 ns
-    initial CLK = 1'b0;
+    initial CLK = 1'b1;
     always #4 CLK = ~CLK;
 
     // Main Driver Simulation
@@ -60,7 +60,7 @@ module cpu_tb;
         // An Initial Hardware Reset was implemented for better clarity 
         // Hold through one full clock cycle period before beginning executions
         RESET = 1'b1;
-        #8;
+        #4;
 
         // Value down at Negative CLK edge
         @(negedge CLK);

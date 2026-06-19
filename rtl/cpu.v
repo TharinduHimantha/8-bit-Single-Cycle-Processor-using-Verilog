@@ -1,8 +1,5 @@
-// ============================================================================
-// CO2070 Computer Architecture
-// cpu.v
-
 `timescale 1ns/100ps
+
 
 // ------------------------------------------------------------
 // Control Unit 
@@ -16,17 +13,16 @@ Description: According to the given OPCODE,
 */
 
 module control_unit (
-
-    // Input / Output
     input  wire [7:0] OPCODE,
     output reg [2:0] ALUOP,
     output reg WRITEENABLE,
     output reg IMM_SEL,  
     output reg NEG_SEL,
     output reg JUMP,        // Flag for Jump instruction
-    output reg BRANCH       // Flag for Branch instruction
+    output reg BRANCH_EQ,   // Flag for Branch if equal instruction
+    output reg BRANCH_NEQ,  // // Flag for Branch if not equal instruction
+    output reg [1:0] SHIFT_SEL 
 );
-
 
     // Instruction Opcodes saved as local parameters
     // Values configured according to the Assembler ISA
@@ -36,68 +32,58 @@ module control_unit (
     localparam OP_SUB   = 8'b00000011;
     localparam OP_AND   = 8'b00000100;
     localparam OP_OR    = 8'b00000101;
-    localparam OP_J     = 8'b00000110;  // Added JUMP opcode
-    localparam OP_BEQ   = 8'b00000111;  // Added BEQ opcode
 
-    // Control Unit Operations
+    // J anf beq
+    localparam OP_J     = 8'b00000110;  
+    localparam OP_BEQ   = 8'b00000111;
+
+    // for the extended ISA
+    localparam OP_MULT  = 8'b00001000;
+    localparam OP_SLL   = 8'b00001001;
+    localparam OP_SRL   = 8'b00001010;
+    localparam OP_SRA   = 8'b00001011;
+    localparam OP_ROR   = 8'b00001100;
+    localparam OP_BNE   = 8'b00001101;
+
+
+     // Control Unit Operations
     always @(OPCODE) begin
 
-        #1; // Artificial decode delay
-
-        // Setting up output according to the OPCODE Input ------------
+        #1;  // Artificial decode delay    
         
+        // Setting up output according to the OPCODE Input ------------
+
         // Defaults establishing
         ALUOP       = 3'b000;
         WRITEENABLE = 1'b0;
         IMM_SEL     = 1'b0;
         NEG_SEL     = 1'b0;
         JUMP        = 1'b0;
-        BRANCH      = 1'b0;
+        BRANCH_EQ   = 1'b0;
+        BRANCH_NEQ  = 1'b0;
+        SHIFT_SEL   = 2'b00;
 
         // Used case base setup
         case (OPCODE)
+        
+            OP_LOADI: begin ALUOP = 3'b000; WRITEENABLE = 1'b1; IMM_SEL = 1'b1; end
+            OP_MOV:   begin ALUOP = 3'b000; WRITEENABLE = 1'b1; end
+            OP_ADD:   begin ALUOP = 3'b001; WRITEENABLE = 1'b1; end
+            OP_SUB:   begin ALUOP = 3'b001; WRITEENABLE = 1'b1; NEG_SEL = 1'b1; end
+            OP_AND:   begin ALUOP = 3'b010; WRITEENABLE = 1'b1; end
+            OP_OR:    begin ALUOP = 3'b011; WRITEENABLE = 1'b1; end
 
-            OP_LOADI: begin
-                ALUOP       = 3'b000;
-                WRITEENABLE = 1'b1;
-                IMM_SEL     = 1'b1;   
-            end
-
-            OP_MOV: begin
-                ALUOP       = 3'b000;
-                WRITEENABLE = 1'b1;
-            end
-
-            OP_ADD: begin
-                ALUOP       = 3'b001;
-                WRITEENABLE = 1'b1;
-            end
-
-            OP_SUB: begin
-                ALUOP       = 3'b001;
-                WRITEENABLE = 1'b1;
-                NEG_SEL     = 1'b1;
-            end
-
-            OP_AND: begin
-                ALUOP       = 3'b010;
-                WRITEENABLE = 1'b1;
-            end
-
-            OP_OR: begin
-                ALUOP       = 3'b011;
-                WRITEENABLE = 1'b1;
-            end
-
-            OP_J: begin
-                JUMP        = 1'b1;     // Triggers unconditional jump
-            end
-
-            OP_BEQ: begin
-                ALUOP       = 3'b001;   // Subtraction is used for equality test
-                NEG_SEL     = 1'b1;     // hence the 2's complement
-                BRANCH      = 1'b1;     // Flag for branch operation
-            end
+            // J and beq
+            OP_J:     begin JUMP  = 1'b1; end
+            OP_BEQ:   begin ALUOP = 3'b001; NEG_SEL = 1'b1; BRANCH_EQ = 1'b1; end
+            
+            // new extended ISA
+            OP_MULT:  begin ALUOP = 3'b100; WRITEENABLE = 1'b1; end
+            OP_SLL:   begin ALUOP = 3'b101; WRITEENABLE = 1'b1; IMM_SEL = 1'b1; SHIFT_SEL = 2'b00; end
+            OP_SRL:   begin ALUOP = 3'b101; WRITEENABLE = 1'b1; IMM_SEL = 1'b1; SHIFT_SEL = 2'b01; end
+            OP_SRA:   begin ALUOP = 3'b101; WRITEENABLE = 1'b1; IMM_SEL = 1'b1; SHIFT_SEL = 2'b10; end
+            OP_ROR:   begin ALUOP = 3'b101; WRITEENABLE = 1'b1; IMM_SEL = 1'b1; SHIFT_SEL = 2'b11; end
+            OP_BNE:   begin ALUOP = 3'b001; NEG_SEL = 1'b1; BRANCH_NEQ = 1'b1; end
         endcase        
     end
 endmodule
@@ -155,6 +141,8 @@ endmodule
 
 
 
+
+
 // ------------------------------------------------------------
 // Unit: Top-Level CPU Module
 // module cpu(PC, INSTRUCTION, CLK, RESET)
@@ -166,27 +154,31 @@ module cpu (
     input  wire CLK,
     input  wire RESET
 );
+
     // Slicing of Instruction
     wire [7:0] opcode = INSTRUCTION[31:24];
     wire [2:0] rd     = INSTRUCTION[18:16]; 
     wire [7:0] imm    = INSTRUCTION[7:0];
-    
+
     // Extracting the offset in RD,IMM field
     // bits 23:16
     wire [7:0] offset_imm = INSTRUCTION[23:16];
-
+    
     // Wires for register reading
     reg [2:0] read_reg1_addr;
     reg [2:0] read_reg2_addr;
-
+    
+    // ALU Operaion signal
+    wire [2:0] aluop;
 
     // Control Unit Signals
-    wire [2:0] aluop;
     wire writeenable;
     wire imm_sel;
     wire neg_sel;
     wire jump;
-    wire branch;
+    wire branch_eq;
+    wire branch_neq;
+    wire [1:0] shift_sel;
 
     // Connections in Datapath
     wire [7:0] regout1;   
@@ -201,11 +193,13 @@ module cpu (
 
     // Branch and Jump calculations adder related
     wire [31:0] bj_target;
-    wire [31:0] extended_offset;
+
     wire pc_src;
 
     // Sign extend 8 bit offset
     // Then shift left by 2 = multiply by 4 (instruction size)
+    wire [31:0] extended_offset;
+
     assign extended_offset = {{22{offset_imm[7]}}, offset_imm, 2'b00};
 
 
@@ -213,20 +207,18 @@ module cpu (
     // Adresses of two Read registers parsing according to instruction type
     // done based on OPCODE
     always @(*) begin
-
         // For MOV instructions
         // localparam OP_MOV   = 8'b00000001;
         if (opcode == 8'b00000001) begin
-            read_reg1_addr = INSTRUCTION[2:0];  // Source register from Byte 0 
+            read_reg1_addr = INSTRUCTION[2:0];  // Source register from Byte 0
             read_reg2_addr = 3'b000;            // for fault tollerence rather than keeping floating
 
         // Other instructions - ADD, SUB, AND, OR 
         end else begin
-            read_reg1_addr = INSTRUCTION[10:8]; // Source 1 - from Byte 1
-            read_reg2_addr = INSTRUCTION[2:0];  // Source 2 - from Byte 0
+            read_reg1_addr = INSTRUCTION[10:8];
+            read_reg2_addr = INSTRUCTION[2:0];
         end
     end
-
 
     // Creating instants of each submodule
 
@@ -238,10 +230,12 @@ module cpu (
         .IMM_SEL (imm_sel),
         .NEG_SEL (neg_sel),
         .JUMP (jump),
-        .BRANCH (branch)
+        .BRANCH_EQ (branch_eq),
+        .BRANCH_NEQ (branch_neq),
+        .SHIFT_SEL (shift_sel)
     );
 
-    // register unit
+    // register file
     reg_file rf (
         .IN (alu_result),
         .OUT1 (regout1),
@@ -254,32 +248,33 @@ module cpu (
         .RESET (RESET)
     );
 
-    // twos complement creator
+
     twos_comp tc (
         .DATA (regout2),
         .RESULT (twos_result)
     );
 
-    //pc adder
+    // PC adder unit
     pc_adder pca (
         .PC_IN (PC),
         .PC_NEXT (pc_next)
     );
 
-    // branch/jump target adder
+    // branch control unit
     bj_adder bja (
         .PC_NEXT (pc_next),
         .OFFSET (extended_offset),
         .TARGET (bj_target)
     );
 
-    // ALU unit
+    // ALU
     alu main_alu (
         .DATA1 (regout1),
         .DATA2 (alu_data2),
         .RESULT (alu_result),
-        .ZERO (zero),       // ZERO flag connection
-        .SELECT(aluop)
+        .ZERO (zero),       
+        .SELECT(aluop),
+        .SHIFT_SEL(shift_sel)
     );
 
 
@@ -308,8 +303,8 @@ Unit's Delay: 0
             alu_data2 = mux_sub_out;
     end
 
-    // PC multiplexer Logic
-    assign pc_src = jump | (branch & zero);
+    // Updated PC Multiplexer Logic
+    assign pc_src = jump | (branch_eq & zero) | (branch_neq & ~zero);
 
     // PC Update Logic
     // Happens according to Synchronous CLK
@@ -318,9 +313,8 @@ Unit's Delay: 0
         if (RESET)
             #1 PC <= 32'b0;
         else if (pc_src)
-            #1 PC <= bj_target;  // PC overwritten by calculated target
+            #1 PC <= bj_target;      // PC overwritten by calculated target
         else
-            #1 PC <= pc_next;    // Standard sequence
+            #1 PC <= pc_next;     // Standard sequence
     end
-
 endmodule

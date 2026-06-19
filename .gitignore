@@ -1,5 +1,4 @@
 # Simulation outputs
-*.vcd
 *.out
 *.log
 *.vvp
