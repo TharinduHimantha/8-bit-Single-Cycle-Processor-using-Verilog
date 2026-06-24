@@ -34,6 +34,8 @@ This processor implements a simplified RISC-style 8-bit ISA with 32-bit fixed-le
 
 **Extended ISA (bonus):** `mult`, `sll`, `srl`, `sra`, `ror`, `bne`
 
+![Schematic diagram](<screenshots/schematic-diagram.png>)
+
 ---
 
 ## Instruction Set Architecture
