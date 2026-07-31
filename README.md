@@ -10,7 +10,7 @@
 ![Single Cycle](https://img.shields.io/badge/Architecture-Single--Cycle-orange?style=for-the-badge)
 
 
-An 8-bit single-cycle processor designed in Verilog HDL featuring an ALU, 8×8 register file, control unit, and program counter. The processor implements basic arithmetic, logical, data transfer, jump, and branch instructions using a custom 32-bit instruction format. Developed as part of a CO2070 Computer Architecture lab series.
+An 8-bit single-cycle processor designed in Verilog HDL, featuring an ALU, 8×8 register file, control unit, program counter, data memory, data cache, instruction memory, and instruction cache. The processor implements arithmetic, logical, data transfer, jump, branch, and memory access instructions using a custom 32-bit instruction format. Developed as part of the CO2070 Computer Architecture lab series.
 
 ---
 
@@ -18,27 +18,39 @@ An 8-bit single-cycle processor designed in Verilog HDL featuring an ALU, 8×8 r
 
 - [Project Overview](#project-overview)
 - [Instruction Set Architecture](#instruction-set-architecture)
-- [Repository Structure](#development-flow)
+- [Development Flow](#development-flow)
 - [Module Descriptions](#module-descriptions)
+- [Memory Hierarchy](#memory-hierarchy)
 - [Datapath & Timing](#datapath--timing)
 - [Getting Started](#getting-started)
-- [Extended ISA (Bonus)](#extended-isa)
+- [Extended ISA (Bonus)](#extended-isa-bonus)
 
 ---
 
 ## Project Overview
 
-This processor implements a simplified RISC-style 8-bit ISA with 32-bit fixed-length instructions. It is a **single-cycle design**, meaning every instruction completes in exactly one clock cycle (8 time units).
+This processor implements a simplified RISC-style 8-bit ISA with 32-bit fixed-length instructions. It is a **single-cycle design**, meaning every instruction completes within one clock cycle (8 time units) under cache-hit conditions.
 
-**Core supported instructions:** `add`, `sub`, `and`, `or`, `mov`, `loadi`, `j`, `beq`
 
-**Extended ISA (bonus):** `mult`, `sll`, `srl`, `sra`, `ror`, `bne`
+**Core ISA :**  `add`, `sub`, `and`, `or`, `mov`, `loadi`, `j`, `beq`
+
+**Extended ISA :** `mult`, `sll`, `srl`, `sra`, `ror`, `bne`
+
+**Memory accessing ISA :** `lwd`, `lwi`, `swd`, `swi`
+
 
 ![Schematic diagram](<screenshots/schematic-diagram.png>)
 
+<br>
+
+The system uses a **two-level memory hierarchy** with separate instruction and data paths:
+- Direct-mapped **data cache** (write-back, write-allocate) backed by a 256-byte data memory
+- Direct-mapped **instruction cache** backed by a 1024-byte instruction memory
+<br>
 ---
 
 ## Instruction Set Architecture
+
 
 ### Instruction Encoding (32-bit fixed length)
 
@@ -51,59 +63,81 @@ This processor implements a simplified RISC-style 8-bit ISA with 32-bit fixed-le
 - **RT** (bits 15–8): source register 1
 - **RS / IMM** (bits 7–0): source register 2, or immediate value
 
+
 ### Instruction Reference
 
 | Instruction | Example | Description |
 |-------------|---------|-------------|
-| `add` | `add 4 1 2` | R4 ← R1 + R2 |
-| `sub` | `sub 4 1 2` | R4 ← R1 − R2 |
-| `and` | `and 4 1 2` | R4 ← R1 & R2 |
-| `or`  | `or 4 1 2`  | R4 ← R1 \| R2 |
-| `mov` | `mov 4 1`   | R4 ← R1 (bits 15–8 ignored) |
-| `loadi` | `loadi 4 0xFF` | R4 ← 0xFF (bits 15–8 ignored) |
-| `j`   | `j 0x02`    | PC ← PC+4 + (2×4); jump forward 2 instructions |
-| `beq` | `beq 0xFE 1 2` | if R1 == R2: PC ← PC+4 + (offset×4) |
+| `add`   | `add 4 1 2`       | R4 ← R1 + R2 |
+| `sub`   | `sub 4 1 2`       | R4 ← R1 − R2 |
+| `and`   | `and 4 1 2`       | R4 ← R1 & R2 |
+| `or`    | `or 4 1 2`        | R4 ← R1 \| R2 |
+| `mov`   | `mov 4 1`         | R4 ← R1 (bits 7–0 ignored) |
+| `loadi` | `loadi 4 0xFF`    | R4 ← 0xFF (bits 15–8 ignored) |
+| `j`     | `j 0x02`          | PC ← PC+4 + (offset×4), forward jump |
+| `beq`   | `beq 0xFE 1 2`    | if R1 == R2: PC ← PC+4 + (offset×4) |
+| `lwd`   | `lwd 4 2`         | R4 ← Mem[R2] (register direct) |
+| `lwi`   | `lwi 4 0x1F`      | R4 ← Mem[0x1F] (immediate) |
+| `swd`   | `swd 2 3`         | Mem[R3] ← R2 (register direct) |
+| `swi`   | `swi 2 0x8C`      | Mem[0x8C] ← R2 (immediate) |
 
-> Negative offsets (e.g. `0xFE` = −2 in signed 8-bit) allow backward branching.
+> Negative offsets (e.g. `0xFE` = −2 in signed 8-bit two's complement) enable backward branching.
 
 
 ---
 
 ## Development Flow
-
 The processor was developed incrementally across a series of laboratory exercises, with each stage building upon the components implemented in previous labs.
 
 ```mermaid
 flowchart LR
     subgraph L2["Lab 2: Core Components"]
-        ALU["8-bit ALU<br/>(FORWARD, ADD, AND, OR)"]
+        ALU["8-bit ALU\n(FORWARD, ADD, AND, OR)"]
         RF["8×8 Register File"]
     end
 
     subgraph L3["Lab 3: CPU Construction"]
-        CPU1["Single-Cycle CPU"]
+        CPU1["Single-Cycle CPU\nadd sub and or mov loadi"]
     end
 
     subgraph L4["Lab 4: Control Flow"]
-        CPU2["CPU + j + beq<br/>ZERO Flag"]
+        CPU2["CPU + j + beq\nZERO Flag"]
     end
 
-    subgraph L45["Lab 4.5: Extended ISA"]
-        CPU3["Enhanced CPU<br/>Additional Instructions"]
+    subgraph L45["Lab 4.5: Extended ISA (Bonus)"]
+        CPU3["Enhanced CPU\nmult sll srl sra ror bne"]
+    end
+
+    subgraph L5["Lab 5: Data Memory"]
+        CPU4["CPU + lwd lwi swd swi\nBUSYWAIT stalling"]
+        DM["256B Data Memory"]
+    end
+
+    subgraph L6["Lab 6: Data Cache"]
+        DC["Direct-Mapped Data Cache\nWrite-back, Write-allocate"]
+    end
+
+    subgraph L7["Lab 7: Instruction Cache"]
+        IC["Direct-Mapped Instruction Cache"]
+        IM["1024B Instruction Memory"]
     end
 
     ALU --> CPU1
     RF --> CPU1
     CPU1 --> CPU2
     CPU2 --> CPU3
+    CPU2 --> CPU4
+    CPU4 --- DM
+    DM --> DC
+    CPU4 --> IC
+    IC --- IM
 ```
 
 ---
 
 ## Module Descriptions
 
-### `alu` - Arithmetic Logic Unit
-
+### `alu` — Arithmetic Logic Unit
 
 **Interface:**
 ```verilog
@@ -111,25 +145,24 @@ module alu(DATA1, DATA2, RESULT, SELECT, ZERO);
     input  [7:0] DATA1, DATA2;
     input  [2:0] SELECT;
     output [7:0] RESULT;
-    output ZERO;   // 1 when RESULT == 0 (used by beq)
+    output       ZERO;   // Asserted when RESULT == 0 (used by beq/bne)
 ```
-
 
 Each functional unit is a separate submodule with an artificial delay to model realistic latency:
 
-| Unit | Delay | Module |
-|------|-------|--------|
-| FORWARD | `#1` | `forward_unit` |
-| ADD | `#2` | `add_unit` |
-| AND | `#1` | `and_unit` |
-| OR  | `#1` | `or_unit`  |
+| Unit | Delay | Module | Used by |
+|------|-------|--------|---------|
+| FORWARD | `#1` | `forward_unit` | `loadi`, `mov` |
+| ADD | `#2` | `add_unit` | `add`, `sub`, memory address |
+| AND | `#1` | `and_unit` | `and` |
+| OR  | `#1` | `or_unit`  | `or` |
+
 
 A MUX inside the `alu` module selects which unit's output to route to `RESULT` based on `SELECT`.
 
+---
 
-
-### `reg_file` - Register File
-
+### `reg_file` — Register File
 
 **Interface:**
 ```verilog
@@ -146,66 +179,226 @@ module reg_file(IN, OUT1, OUT2, INADDRESS, OUT1ADDRESS, OUT2ADDRESS, WRITE, CLK,
 - **Reset** is synchronous, clears all registers to zero on positive clock edge when `RESET` is high
 
 
+---
 
-### `cpu` - Top-Level Processor
-
+### `cpu` — Top-Level Processor
 
 **Interface:**
 ```verilog
-module cpu(PC, INSTRUCTION, CLK, RESET);
+module cpu(PC, INSTRUCTION, CLK, RESET,
+           READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT);
     input  [31:0] INSTRUCTION;
-    input         CLK, RESET;
+    input  [7:0]  READDATA;
+    input         CLK, RESET, BUSYWAIT;
     output [31:0] PC;
+    output [7:0]  ADDRESS, WRITEDATA;
+    output        READ, WRITE;
 ```
+
 
 The CPU module integrates:
 - ALU and register file
-- Combinational control logic (instruction decode → control signals)
-- PC register with synchronous update
-- PC+4 incrementing adder (`#1` latency)
+- Combinational control/decode logic
+- PC register with synchronous update and reset
+- PC+4 adder (`#1` latency)
 - 2's complement unit for `sub` (`#1` latency)
-- MUXes for operand and PC selection
-- (Lab 4) Branch/jump target adder (`#2` latency)
-- (Lab 4) ZERO-flag-based PC selection for `beq`
+- MUXes for operand selection, PC selection, and register write-back source
+- Branch/jump target adder (`#2` latency, parallel to ALU)
+- ZERO-flag multiplexer for `beq`
+- BUSYWAIT stall logic : freezes PC and register writes while asserted
 
-Instruction memory is held in the testbench as a 1024-byte array (256 × 32-bit words) and read asynchronously by the CPU.
+---
+
+### `data_memory` — Data Memory
+
+**Interface:**
+```verilog
+module data_memory(CLK, RESET, READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT);
+    input        CLK, RESET, READ, WRITE;
+    input  [7:0] ADDRESS, WRITEDATA;
+    output [7:0] READDATA;
+    output       BUSYWAIT;
+```
+
+- 256 × 8-bit addressable storage
+- Read and write latency: **5 CPU clock cycles** (`#40` time units)
+- Asserts `BUSYWAIT` during any read or write operation
+
+---
+
+### `data_cache` — Data Cache
+
+**Interface:**
+```verilog
+module data_cache(CLK, RESET, READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT,
+                  MEM_READ, MEM_WRITE, MEM_ADDRESS, MEM_WRITEDATA, MEM_READDATA, MEM_BUSYWAIT);
+```
+
+| Parameter | Value |
+|---|---|
+| Cache size | configurable (direct-mapped) |
+| Block size | 4 bytes |
+| Word size | 1 byte |
+| Address to memory | 6-bit block address |
+| Write policy | Write-back |
+| Replacement policy | Write-allocate |
+| Timescale | `1ns / 100ps` |
+
+Hit/miss latencies:
+
+| Event | Latency |
+|---|---|
+| Index lookup | `#1` |
+| Tag comparison | `#0.9` |
+| Data word select (read) | `#1` (parallel to tag compare) |
+| Cache write (write-hit) | `#1` (after hit confirmed, at next clock edge) |
+| Read miss — fetch from memory | 21 CPU cycles (clean) / 42 CPU cycles (dirty) |
+| Write miss — writeback + fetch | 21 CPU cycles (clean) / 42 CPU cycles (dirty) |
+
+The cache controller uses an FSM for miss handling. `BUSYWAIT` is de-asserted once a hit is resolved or a miss is fully handled.
+
+---
+
+### `instruction_memory` — Instruction Memory
+
+**Interface:**
+```verilog
+module instruction_memory(CLK, READ, ADDRESS, READDATA, BUSYWAIT);
+    input        CLK, READ;
+    input  [5:0] ADDRESS;       // 6-bit block address
+    output [127:0] READDATA;    // 16-byte block
+    output       BUSYWAIT;
+```
+
+- Holds 256 × 32-bit instruction words (1024 bytes total)
+- Block read latency: **80 CPU cycles** (16 bytes × 5 cycles/byte)
+
+---
+
+### `instruction_cache` — Instruction Cache
+
+**Interface:**
+```verilog
+module instruction_cache(CLK, RESET, PC, INSTRUCTION, BUSYWAIT,
+                         MEM_READ, MEM_ADDRESS, MEM_READDATA, MEM_BUSYWAIT);
+```
+
+| Parameter | Value |
+|---|---|
+| Cache size | 128 bytes |
+| Block size | 16 bytes (4 instruction words) |
+| Word size | 4 bytes (32-bit instruction) |
+| Number of cache entries | 8 |
+| Placement policy | Direct-mapped |
+| Address to memory | 6-bit block address |
+| Write policy | Read-only (no dirty bit) |
+| Timescale | `1ns / 100ps` |
+
+Hit/miss latencies:
+
+| Event | Latency |
+|---|---|
+| Index lookup | `#1` |
+| Tag comparison | `#0.9` |
+| Instruction word select | `#1` (parallel to tag compare) |
+| Miss penalty | 81 CPU cycles |
+
 
 ---
 
 ## Datapath & Timing
 
-One clock cycle = **8 time units** (rising edge to rising edge).
+One clock cycle = **8 time units**, rising edge to rising edge. All instructions complete within one cycle under cache-hit conditions.
 
-### Instruction Timing Breakdown
+### Component Latencies
 
-| Stage | Latency |
-|-------|---------|
-| PC update (write) | `#1` |
-| Instruction memory read | `#2` |
-| PC+4 adder | `#1` (parallel to memory read) |
-| Instruction decode | `#1` |
-| Register read | `#2` |
-| 2's complement (sub/beq only) | `#1` |
-| ALU execute | `#1` or `#2` (depends on operation) |
-| Register write | `#1` |
-| Branch/jump target adder (Lab 4) | `#2` (parallel to ALU) |
+| Component | Delay | Notes |
+|---|---|---|
+| PC write | `#1` | Synchronous |
+| Instruction fetch (cache hit) | `#2` | Replaces testbench array in Lab 7 |
+| PC+4 adder | `#1` | Parallel to fetch |
+| Instruction decode | `#1` | Combinational |
+| Register read | `#2` | Asynchronous |
+| Register write | `#1` | Synchronous |
+| 2's complement | `#1` | `sub`, `beq` only |
+| ALU — FORWARD/AND/OR | `#1` | Combinational |
+| ALU — ADD | `#2` | Combinational |
+| Branch/jump adder | `#2` | Parallel to ALU |
+| Data memory access (cache hit) | `#2` | Ideal; misses stall the CPU |
 
 ### Worst-Case Paths
 
 ```
-add/sub:    PC(#1) → MEM(#2) → DECODE(#1) → RREAD(#2) → [2COMP(#1)] → ALU(#2) → RWRT(#1) = 8 units
-and/or/mov: PC(#1) → MEM(#2) → DECODE(#1) → RREAD(#2) → ALU(#1) → RWRT(#1) = 8 units
-loadi:      PC(#1) → MEM(#2) → DECODE(#1) → ALU(#1) → RWRT(#1) = 6 units (fits within 8)
-j:          PC(#1) → MEM(#2) → DECODE(#1) → BRANCH_ADDER(#2) → PC_WRT(#1) = 7 units
-beq:        PC(#1) → MEM(#2) → DECODE(#1) → RREAD(#2) → 2COMP(#1) → ALU(#2) → PC_WRT(#1) = 8 units
+add:        PC(#1) → IMEM(#2) → DECODE(#1) → RREAD(#2) → ALU_ADD(#2) → RWRT(#1)  = 9 → straddles edge
+sub:        ... → RREAD(#2) → 2COMP(#1) → ALU_ADD(#2) → RWRT(#1)
+and/or/mov: ... → RREAD(#2) → ALU(#1) → RWRT(#1)
+loadi:      PC(#1) → IMEM(#2) → DECODE(#1) → ALU(#1) → RWRT(#1)
+j:          PC(#1) → IMEM(#2) → DECODE(#1) → BADDER(#2) → PC_WRT(#1)
+beq:        ... → RREAD(#2) → 2COMP(#1) → ALU(#2) → PC_WRT(#1)
+lwd:        ... → RREAD(#2) → ALU(#1) → DMEM(#2) → RWRT(#1)
+lwi:        PC(#1) → IMEM(#2) → DECODE(#1) → ALU(#1) → DMEM(#2) → RWRT(#1)
+swd/swi:    similar to lwd/lwi, no register write at end
 ```
 
 ---
 
+## Memory Hierarchy
+
+```mermaid
+
+flowchart LR
+
+    CPU["CPU"]
+
+    subgraph Instruction_Path["Instruction Path"]
+        direction LR
+        IC["Instruction Cache<br/>128 B<br/>8 entries<br/>16 B blocks"]
+        IM["Instruction Memory<br/>1024 B<br/>16 B block reads"]
+        IC -->|"Miss (81 cycles)"| IM
+    end
+
+    subgraph Data_Path["Data Path"]
+        direction LR
+        DC["Data Cache<br/>Direct-mapped<br/>4 B blocks<br/>Write-Back<br/>Write-Allocate"]
+        DM["Data Memory<br/>256 B<br/>4 B block read/write"]
+        DC -->|"Miss (21 / 42 cycles)"| DM
+    end
+
+    CPU -->|"PC"| IC
+    CPU -->|"Data"| DC
+
+    %% Keep the two rows aligned
+    IC --- DC
+    IM --- DM
+
+    linkStyle 4 stroke-width:0px;
+    linkStyle 5 stroke-width:0px;
+
+    classDef cpu fill:#ffffff,stroke:#222,stroke-width:2px;
+    classDef cache fill:#eef5ff,stroke:#4b6cb7,stroke-width:1.5px;
+    classDef memory fill:#fff8e8,stroke:#c28a00,stroke-width:1.5px;
+
+    class CPU cpu;
+    class IC,DC cache;
+    class IM,DM memory;
+```
+
+### Cache Performance Summary
+
+| Scenario | Cycles |
+|---|---|
+| Cache hit (read or write) | 0 stall cycles (resolved in `#1.9` time units) |
+| Data miss, clean block | +21 CPU cycles stall |
+| Data miss, dirty block (writeback first) | +42 CPU cycles stall |
+| Instruction miss | +81 CPU cycles stall |
+
+
+---
+
+
 ## Getting Started
 
 ### Prerequisites
-
 - [Icarus Verilog](http://iverilog.icarus.com/) (`iverilog` + `vvp`) — open-source Verilog simulator
 - [GTKWave](http://gtkwave.sourceforge.net/) — waveform viewer
 - (Optional) CO224Assembler tool provided with the lab for generating machine code
@@ -215,6 +408,16 @@ beq:        PC(#1) → MEM(#2) → DECODE(#1) → RREAD(#2) → 2COMP(#1) → AL
 ```bash
 sudo apt install iverilog gtkwave
 ```
+
+### Timescale
+
+All modules use:
+```verilog
+`timescale 1ns/100ps
+```
+This must be included at the top of **every** Verilog file to correctly simulate fractional delays (e.g. `#0.9`).
+
+
 ### Simulation & Testing
 
 To compile the design and run tests: 
@@ -222,10 +425,10 @@ To compile the design and run tests:
 <!-- TODO: replace with your actual testbench file name if different -->
 ```bash
 # Compile the Verilog testbench and source modules
-iverilog -o processor_tb cpu.v alu.v reg_file.v tb_cpu.v
+iverilog -o processor cpu.v alu.v reg_file.v dmem.v dcache.v imem.v icache.v tb.v
 
 # Run the simulation outputting to VVP
-vvp processor_tb
+vvp processor
 
 # Open waveform using GTKWave
 gtkwave dump.vcd
@@ -237,14 +440,15 @@ gtkwave dump.vcd
 2. Compile and run the assembler to convert `.s` programs to machine code
 3. Use the provided shell script `generate_memory_image.sh` to convert machine code to a memory image for the testbench
 
+
 ---
 
-## Extended ISA
+## Extended ISA (Bonus)
 
 Lab 4.5 extends the processor with additional instructions while keeping the 3-bit ALUOP signal (8 functional units total). Functional units are shared where possible (e.g. shift operations).
 
 | Instruction | Example | Description |
-|-------------|---------|-------------|
+|---|---|---|
 | `mult` | `mult 4 1 2` | R4 ← R1 × R2 |
 | `sll`  | `sll 4 1 0x02` | R4 ← R1 << 2 (logical) |
 | `srl`  | `srl 4 1 0x02` | R4 ← R1 >> 2 (logical) |
@@ -255,9 +459,7 @@ Lab 4.5 extends the processor with additional instructions while keeping the 3-b
 
 > **Note:** All new functional units are implemented without built-in Verilog operators (no `<<`, `>>`, `*`) as per lab requirements.
 
-
 See `extended_ISA_documentation.pdf` for full encoding details, opcode assignments, timing analysis, and datapath modifications.
-
 
 ![Verilog](https://img.shields.io/badge/Verilog-HDL-blue)
 ![8-bit CPU](https://img.shields.io/badge/CPU-8--Bit-green)
@@ -268,5 +470,11 @@ See `extended_ISA_documentation.pdf` for full encoding details, opcode assignmen
 ![ALU](https://img.shields.io/badge/ALU-8--Bit-yellow)
 ![Assembler](https://img.shields.io/badge/Input-Assembly%20to%20Machine%20Code-blueviolet)
 ![Simulation](https://img.shields.io/badge/Verification-Testbench-success)
+
+![Memory Architecture](https://img.shields.io/badge/Memory-Harvard%20Architecture-blue)
+![Instruction Memory](https://img.shields.io/badge/Instruction%20Memory-1024B-success)
+![Data Memory](https://img.shields.io/badge/Data%20Memory-256B-orange)
+![Instruction Cache](https://img.shields.io/badge/I--Cache-128B-4b8bbe)
+![Data Cache](https://img.shields.io/badge/D--Cache-Direct--Mapped-green)
 
 
