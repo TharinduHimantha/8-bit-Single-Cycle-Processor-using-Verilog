@@ -9,6 +9,8 @@
 ![8-bit CPU](https://img.shields.io/badge/CPU-8--Bit-green?style=for-the-badge)
 ![Single Cycle](https://img.shields.io/badge/Architecture-Single--Cycle-orange?style=for-the-badge)
 
+![Harvard Architecture](https://img.shields.io/badge/Memory-Harvard%20Architecture-9f57cf?style=for-the-badge)
+
 
 An 8-bit single-cycle processor designed in Verilog HDL, featuring an ALU, 8×8 register file, control unit, program counter, data memory, data cache, instruction memory, and instruction cache. The processor implements arithmetic, logical, data transfer, jump, branch, and memory access instructions using a custom 32-bit instruction format. Developed as part of the CO2070 Computer Architecture lab series.
 
@@ -46,7 +48,7 @@ This processor implements a simplified RISC-style 8-bit ISA with 32-bit fixed-le
 The system uses a **two-level memory hierarchy** with separate instruction and data paths:
 - Direct-mapped **data cache** (write-back, write-allocate) backed by a 256-byte data memory
 - Direct-mapped **instruction cache** backed by a 1024-byte instruction memory
-<br>
+
 ---
 
 ## Instruction Set Architecture
@@ -137,7 +139,7 @@ flowchart LR
 
 ## Module Descriptions
 
-### `alu` — Arithmetic Logic Unit
+### `alu` - Arithmetic Logic Unit
 
 **Interface:**
 ```verilog
@@ -162,7 +164,7 @@ A MUX inside the `alu` module selects which unit's output to route to `RESULT` b
 
 ---
 
-### `reg_file` — Register File
+### `reg_file` - Register File
 
 **Interface:**
 ```verilog
@@ -181,7 +183,7 @@ module reg_file(IN, OUT1, OUT2, INADDRESS, OUT1ADDRESS, OUT2ADDRESS, WRITE, CLK,
 
 ---
 
-### `cpu` — Top-Level Processor
+### `cpu` - Top-Level Processor
 
 **Interface:**
 ```verilog
@@ -206,139 +208,6 @@ The CPU module integrates:
 - Branch/jump target adder (`#2` latency, parallel to ALU)
 - ZERO-flag multiplexer for `beq`
 - BUSYWAIT stall logic : freezes PC and register writes while asserted
-
----
-
-### `data_memory` — Data Memory
-
-**Interface:**
-```verilog
-module data_memory(CLK, RESET, READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT);
-    input        CLK, RESET, READ, WRITE;
-    input  [7:0] ADDRESS, WRITEDATA;
-    output [7:0] READDATA;
-    output       BUSYWAIT;
-```
-
-- 256 × 8-bit addressable storage
-- Read and write latency: **5 CPU clock cycles** (`#40` time units)
-- Asserts `BUSYWAIT` during any read or write operation
-
----
-
-### `data_cache` — Data Cache
-
-**Interface:**
-```verilog
-module data_cache(CLK, RESET, READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT,
-                  MEM_READ, MEM_WRITE, MEM_ADDRESS, MEM_WRITEDATA, MEM_READDATA, MEM_BUSYWAIT);
-```
-
-| Parameter | Value |
-|---|---|
-| Cache size | configurable (direct-mapped) |
-| Block size | 4 bytes |
-| Word size | 1 byte |
-| Address to memory | 6-bit block address |
-| Write policy | Write-back |
-| Replacement policy | Write-allocate |
-| Timescale | `1ns / 100ps` |
-
-Hit/miss latencies:
-
-| Event | Latency |
-|---|---|
-| Index lookup | `#1` |
-| Tag comparison | `#0.9` |
-| Data word select (read) | `#1` (parallel to tag compare) |
-| Cache write (write-hit) | `#1` (after hit confirmed, at next clock edge) |
-| Read miss — fetch from memory | 21 CPU cycles (clean) / 42 CPU cycles (dirty) |
-| Write miss — writeback + fetch | 21 CPU cycles (clean) / 42 CPU cycles (dirty) |
-
-The cache controller uses an FSM for miss handling. `BUSYWAIT` is de-asserted once a hit is resolved or a miss is fully handled.
-
----
-
-### `instruction_memory` — Instruction Memory
-
-**Interface:**
-```verilog
-module instruction_memory(CLK, READ, ADDRESS, READDATA, BUSYWAIT);
-    input        CLK, READ;
-    input  [5:0] ADDRESS;       // 6-bit block address
-    output [127:0] READDATA;    // 16-byte block
-    output       BUSYWAIT;
-```
-
-- Holds 256 × 32-bit instruction words (1024 bytes total)
-- Block read latency: **80 CPU cycles** (16 bytes × 5 cycles/byte)
-
----
-
-### `instruction_cache` — Instruction Cache
-
-**Interface:**
-```verilog
-module instruction_cache(CLK, RESET, PC, INSTRUCTION, BUSYWAIT,
-                         MEM_READ, MEM_ADDRESS, MEM_READDATA, MEM_BUSYWAIT);
-```
-
-| Parameter | Value |
-|---|---|
-| Cache size | 128 bytes |
-| Block size | 16 bytes (4 instruction words) |
-| Word size | 4 bytes (32-bit instruction) |
-| Number of cache entries | 8 |
-| Placement policy | Direct-mapped |
-| Address to memory | 6-bit block address |
-| Write policy | Read-only (no dirty bit) |
-| Timescale | `1ns / 100ps` |
-
-Hit/miss latencies:
-
-| Event | Latency |
-|---|---|
-| Index lookup | `#1` |
-| Tag comparison | `#0.9` |
-| Instruction word select | `#1` (parallel to tag compare) |
-| Miss penalty | 81 CPU cycles |
-
-
----
-
-## Datapath & Timing
-
-One clock cycle = **8 time units**, rising edge to rising edge. All instructions complete within one cycle under cache-hit conditions.
-
-### Component Latencies
-
-| Component | Delay | Notes |
-|---|---|---|
-| PC write | `#1` | Synchronous |
-| Instruction fetch (cache hit) | `#2` | Replaces testbench array in Lab 7 |
-| PC+4 adder | `#1` | Parallel to fetch |
-| Instruction decode | `#1` | Combinational |
-| Register read | `#2` | Asynchronous |
-| Register write | `#1` | Synchronous |
-| 2's complement | `#1` | `sub`, `beq` only |
-| ALU — FORWARD/AND/OR | `#1` | Combinational |
-| ALU — ADD | `#2` | Combinational |
-| Branch/jump adder | `#2` | Parallel to ALU |
-| Data memory access (cache hit) | `#2` | Ideal; misses stall the CPU |
-
-### Worst-Case Paths
-
-```
-add:        PC(#1) → IMEM(#2) → DECODE(#1) → RREAD(#2) → ALU_ADD(#2) → RWRT(#1)  = 9 → straddles edge
-sub:        ... → RREAD(#2) → 2COMP(#1) → ALU_ADD(#2) → RWRT(#1)
-and/or/mov: ... → RREAD(#2) → ALU(#1) → RWRT(#1)
-loadi:      PC(#1) → IMEM(#2) → DECODE(#1) → ALU(#1) → RWRT(#1)
-j:          PC(#1) → IMEM(#2) → DECODE(#1) → BADDER(#2) → PC_WRT(#1)
-beq:        ... → RREAD(#2) → 2COMP(#1) → ALU(#2) → PC_WRT(#1)
-lwd:        ... → RREAD(#2) → ALU(#1) → DMEM(#2) → RWRT(#1)
-lwi:        PC(#1) → IMEM(#2) → DECODE(#1) → ALU(#1) → DMEM(#2) → RWRT(#1)
-swd/swi:    similar to lwd/lwi, no register write at end
-```
 
 ---
 
@@ -385,61 +254,171 @@ flowchart LR
 
 ### Cache Performance Summary
 
-| Scenario | Cycles |
-|---|---|
-| Cache hit (read or write) | 0 stall cycles (resolved in `#1.9` time units) |
-| Data miss, clean block | +21 CPU cycles stall |
-| Data miss, dirty block (writeback first) | +42 CPU cycles stall |
-| Instruction miss | +81 CPU cycles stall |
+- **Cache Hit (Read/Write)**         : 0 stall cycles (`#1.9` time units).
+
+- **Data Cache Miss (Clean Block)**  : 21 CPU cycle stall.
+
+- **Data Cache Miss (Dirty Block)**  : 42 CPU cycle stall (includes writeback).
+
+- **Instruction Cache Miss**         : 81 CPU cycle stall.
 
 
 ---
 
+### `data_memory` - Data Memory
 
-## Getting Started
-
-### Prerequisites
-- [Icarus Verilog](http://iverilog.icarus.com/) (`iverilog` + `vvp`) — open-source Verilog simulator
-- [GTKWave](http://gtkwave.sourceforge.net/) — waveform viewer
-- (Optional) CO224Assembler tool provided with the lab for generating machine code
-
-### Installation (Ubuntu/Debian)
-
-```bash
-sudo apt install iverilog gtkwave
-```
-
-### Timescale
-
-All modules use:
+**Interface:**
 ```verilog
-`timescale 1ns/100ps
-```
-This must be included at the top of **every** Verilog file to correctly simulate fractional delays (e.g. `#0.9`).
-
-
-### Simulation & Testing
-
-To compile the design and run tests: 
-
-<!-- TODO: replace with your actual testbench file name if different -->
-```bash
-# Compile the Verilog testbench and source modules
-iverilog -o processor cpu.v alu.v reg_file.v dmem.v dcache.v imem.v icache.v tb.v
-
-# Run the simulation outputting to VVP
-vvp processor
-
-# Open waveform using GTKWave
-gtkwave dump.vcd
+module data_memory(CLK, RESET, READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT);
+    input        CLK, RESET, READ, WRITE;
+    input  [7:0] ADDRESS, WRITEDATA;
+    output [7:0] READDATA;
+    output       BUSYWAIT;
 ```
 
-### Using the Assembler
+- 256 × 8-bit addressable storage
+- Read and write latency: **5 CPU clock cycles** (`#40` time units)
+- Asserts `BUSYWAIT` during any read or write operation
 
-1. Add your OP-CODE definitions to `CO224Assembler.c`
-2. Compile and run the assembler to convert `.s` programs to machine code
-3. Use the provided shell script `generate_memory_image.sh` to convert machine code to a memory image for the testbench
+---
 
+### `data_cache` - Data Cache
+
+- *Cache size:* Configurable (direct-mapped)
+- *Block size:* 4 bytes
+- *Word size:* 1 byte
+- *Address to memory:* 6-bit block address
+- *Write policy:* Write-back
+- *Replacement policy:* Write-allocate
+- *Timescale:* `1ns / 100ps`
+
+**Interface:**
+```verilog
+module data_cache(CLK, RESET, READ, WRITE, ADDRESS, WRITEDATA, READDATA, BUSYWAIT,
+                  MEM_READ, MEM_WRITE, MEM_ADDRESS, MEM_WRITEDATA, MEM_READDATA, MEM_BUSYWAIT);
+```
+
+
+Hit/miss latencies:
+
+| Event | Latency |
+|---|---|
+| Index lookup | `#1` |
+| Tag comparison | `#0.9` |
+| Data word select (read) | `#1` (parallel to tag compare) |
+| Cache write (write-hit) | `#1` (after hit confirmed, at next clock edge) |
+| Read miss — fetch from memory | 21 CPU cycles (clean) / 42 CPU cycles (dirty) |
+| Write miss — writeback + fetch | 21 CPU cycles (clean) / 42 CPU cycles (dirty) |
+
+The cache controller uses an FSM for miss handling. `BUSYWAIT` is de-asserted once a hit is resolved or a miss is fully handled.
+
+---
+
+### `instruction_memory` - Instruction Memory
+
+**Interface:**
+```verilog
+module instruction_memory(CLK, READ, ADDRESS, READDATA, BUSYWAIT);
+    input        CLK, READ;
+    input  [5:0] ADDRESS;       // 6-bit block address
+    output [127:0] READDATA;    // 16-byte block
+    output       BUSYWAIT;
+```
+
+- Holds 256 × 32-bit instruction words (1024 bytes total)
+- Block read latency: **80 CPU cycles** (16 bytes × 5 cycles/byte)
+
+---
+
+### `instruction_cache` - Instruction Cache
+
+- *Cache size:* 128 bytes
+- *Block size:* 16 bytes (4 instruction words)
+- *Word size:* 4 bytes (32-bit instruction)
+- *Number of cache entries:* 8
+- *Placement policy:* Direct-mapped
+- *Address to memory:* 6-bit block address
+- *Write policy:* Read-only (no dirty bit)
+- *Timescale:* `1ns / 100ps`
+
+
+**Interface:**
+```verilog
+module instruction_cache(CLK, RESET, PC, INSTRUCTION, BUSYWAIT,
+                         MEM_READ, MEM_ADDRESS, MEM_READDATA, MEM_BUSYWAIT);
+```
+
+
+Hit/miss latencies:
+
+| Event | Latency |
+|---|---|
+| Index lookup | `#1` |
+| Tag comparison | `#0.9` |
+| Instruction word select | `#1` (parallel to tag compare) |
+| Miss penalty | 81 CPU cycles |
+
+
+---
+
+## Datapath & Timing
+
+One clock cycle = **8 time units**, rising edge to rising edge. All instructions complete within one cycle under cache-hit conditions.
+
+
+### Component Latencies
+
+| Component | Delay | Notes |
+|---|---|---|
+| PC write | `#1` | Synchronous |
+| Instruction fetch (cache hit) | `#2` | Replaces testbench array in Lab 7 |
+| PC+4 adder | `#1` | Parallel to fetch |
+| Instruction decode | `#1` | Combinational |
+| Register read | `#2` | Asynchronous |
+| Register write | `#1` | Synchronous |
+| 2's complement | `#1` | `sub`, `beq` only |
+| ALU - FORWARD/AND/OR | `#1` | Combinational |
+| ALU - ADD | `#2` | Combinational |
+| Branch/jump adder | `#2` | Parallel to ALU |
+| Data memory access (cache hit) | `#2` | Ideal; misses stall the CPU |
+
+
+### Worst-Case Paths
+
+   **ADD**  
+  `PC(1) → IMEM(2) → DECODE(1) → RREAD(2) → ALU_ADD(2) → RWRT(1)`  
+  *Total delay:* `9` *(critical path; straddles the clock edge).*
+
+   **SUB**  
+  `PC(1) → IMEM(2) → DECODE(1) → RREAD(2) → 2COMP(1) → ALU_ADD(2) → RWRT(1)`  
+  *Total delay:* `10`.
+
+**AND / OR / MOV**  
+  `PC(1) → IMEM(2) → DECODE(1) → RREAD(2) → ALU(1) → RWRT(1)`  
+  *Total delay:* `8`.
+
+**LOADI**  
+  `PC(1) → IMEM(2) → DECODE(1) → ALU(1) → RWRT(1)`  
+  *Total delay:* `6`.
+
+**J**  
+  `PC(1) → IMEM(2) → DECODE(1) → BADDER(2) → PC_WRT(1)`  
+  *Total delay:* `7`.
+
+**BEQ**  
+  `PC(1) → IMEM(2) → DECODE(1) → RREAD(2) → 2COMP(1) → ALU(2) → PC_WRT(1)`  
+  *Total delay:* `10`.
+
+**LWD**  
+  `PC(1) → IMEM(2) → DECODE(1) → RREAD(2) → ALU(1) → DMEM(2) → RWRT(1)`  
+  *Total delay:* `10`.
+
+**LWI**  
+  `PC(1) → IMEM(2) → DECODE(1) → ALU(1) → DMEM(2) → RWRT(1)`  
+  *Total delay:* `8`.
+
+**SWD / SWI**  
+  Same as `LWD` / `LWI`, respectively, but without the final register write.
 
 ---
 
@@ -459,11 +438,12 @@ Lab 4.5 extends the processor with additional instructions while keeping the 3-b
 
 > **Note:** All new functional units are implemented without built-in Verilog operators (no `<<`, `>>`, `*`) as per lab requirements.
 
+
 See `extended_ISA_documentation.pdf` for full encoding details, opcode assignments, timing analysis, and datapath modifications.
 
 ![Verilog](https://img.shields.io/badge/Verilog-HDL-blue)
 ![8-bit CPU](https://img.shields.io/badge/CPU-8--Bit-green)
-![Single Cycle](https://img.shields.io/badge/Architecture-Single--Cycle-orange)
+![Single Cycle](https://img.shields.io/badge/Architecture-Single--Cycle-eda64e)
 ![Custom ISA](https://img.shields.io/badge/ISA-Custom-purple)
 ![Assembly](https://img.shields.io/badge/Assembly-Machine%20Code-red)
 ![Register File](https://img.shields.io/badge/Register%20File-8x8-lightgrey)
@@ -471,10 +451,10 @@ See `extended_ISA_documentation.pdf` for full encoding details, opcode assignmen
 ![Assembler](https://img.shields.io/badge/Input-Assembly%20to%20Machine%20Code-blueviolet)
 ![Simulation](https://img.shields.io/badge/Verification-Testbench-success)
 
-![Memory Architecture](https://img.shields.io/badge/Memory-Harvard%20Architecture-blue)
-![Instruction Memory](https://img.shields.io/badge/Instruction%20Memory-1024B-success)
+![Memory Architecture](https://img.shields.io/badge/Memory-Harvard%20Architecture-36d9d6)
+![Instruction Memory](https://img.shields.io/badge/Instruction%20Memory-1024B-yellowgreen)
 ![Data Memory](https://img.shields.io/badge/Data%20Memory-256B-orange)
-![Instruction Cache](https://img.shields.io/badge/I--Cache-128B-4b8bbe)
-![Data Cache](https://img.shields.io/badge/D--Cache-Direct--Mapped-green)
+![Instruction Cache](https://img.shields.io/badge/ICache-128B-lightgrey)
+![Data Cache](https://img.shields.io/badge/DCache-Direct--Mapped-e84aa4)
 
 
